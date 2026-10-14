@@ -1,0 +1,6 @@
+{
+  "name": "Theo Dõi Học Sinh 35 Tuần - Tin Học Tiểu Học",
+  "description": "Ứng dụng chấm điểm phát biểu và theo dõi kết quả học tập 35 tuần cho giáo viên Tin học với 23 lớp học, bảng tổng hợp 35 tuần, thống kê xếp hạng và xuất nhập Excel đa sheet.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
