@@ -10,6 +10,7 @@ type Cache = CloudCopy & { pending: boolean };
 type Props = { children: (db: AppDatabase, changed: (db: AppDatabase) => void, uid: string) => React.ReactNode };
 const button = 'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 cursor-pointer';
 const primary = `${button} !bg-blue-600 !text-white !border-blue-600 hover:!bg-blue-700`;
+const LEGACY_OWNER_KEY = 'STUDENT_LEGACY_OWNER_V1';
 
 function errorMessage(error: unknown): string {
   const code = (error as { code?: string })?.code;
@@ -40,8 +41,18 @@ export function AccountWorkspace({ children }: Props) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inFlight = useRef<Promise<boolean> | null>(null);
   const conflicted = useRef(false);
-  const [legacy, setLegacy] = useState<AppDatabase | null>(() => readLegacy());
-  useEffect(() => { let active = true; legacyDatabase.readExistingState().then(data => { if (active && data) setLegacy(data); }).catch(() => {}); return () => { active = false; }; }, []);
+  const [legacySource, setLegacySource] = useState<AppDatabase | null>(() => readLegacy());
+  const legacyRef = useRef(legacySource);
+  const [legacyOwner, setLegacyOwner] = useState(() => localStorage.getItem(LEGACY_OWNER_KEY));
+  const legacy = user && (!legacyOwner || legacyOwner === user.uid) ? legacySource : null;
+  useEffect(() => { let active = true; legacyDatabase.readExistingState().then(data => { if (active && data) { legacyRef.current = data; setLegacySource(data); } }).catch(() => {}); return () => { active = false; }; }, []);
+  const claimLegacy = useCallback(() => {
+    const uid = currentUser.current?.uid;
+    const owner = localStorage.getItem(LEGACY_OWNER_KEY);
+    if (!uid || (owner && owner !== uid)) throw new Error('Dữ liệu phiên bản cũ đã thuộc một tài khoản khác.');
+    localStorage.setItem(LEGACY_OWNER_KEY, uid);
+    setLegacyOwner(uid);
+  }, []);
 
   const cache = useCallback((db: AppDatabase, pending: boolean) => {
     const uid = currentUser.current?.uid;
@@ -96,6 +107,9 @@ export function AccountWorkspace({ children }: Props) {
   }, [cache, flush]);
 
   const openCopy = useCallback((db: AppDatabase, cloudRevision: number, cloudJson: string) => {
+    if (legacyRef.current && JSON.stringify(legacyRef.current) === JSON.stringify(db) && !localStorage.getItem(LEGACY_OWNER_KEY)) {
+      try { claimLegacy(); } catch { /* retain unclaimed local backup if storage is unavailable */ }
+    }
     revision.current = cloudRevision;
     savedJson.current = cloudJson;
     latest.current = db;
@@ -106,7 +120,7 @@ export function AccountWorkspace({ children }: Props) {
     setSeed(db);
     setGeneration(n => n + 1);
     setMessage(cloudJson === JSON.stringify(db) ? 'Đã tải dữ liệu từ tài khoản Google' : 'Đang chuyển dữ liệu lên tài khoản…');
-  }, []);
+  }, [claimLegacy]);
 
   const load = useCallback(async (owner: User) => {
     clearTimeout(timer.current);
@@ -187,6 +201,7 @@ export function AccountWorkspace({ children }: Props) {
     downloadBackup(latest.current);
     try { localStorage.setItem(`${cacheKey(user.uid)}_backup`, JSON.stringify(latest.current)); }
     catch { setHasError(true); setMessage('Chưa giữ được bản hiện tại trên máy. Hãy kiểm tra tệp sao lưu trước khi chuyển dữ liệu.'); return; }
+    try { claimLegacy(); } catch (error) { setHasError(true); setMessage(errorMessage(error)); return; }
     openCopy(legacy, revision.current, savedJson.current);
   };
 
@@ -196,8 +211,7 @@ export function AccountWorkspace({ children }: Props) {
     <h1 className="text-2xl font-bold text-slate-900">Theo dõi học sinh 35 tuần</h1>
     <p className="mt-3 mb-6 leading-relaxed text-slate-600">Đăng nhập bằng Google để lưu cấu hình, lớp học, danh sách học sinh, điểm 35 tuần và báo cáo. Dùng cùng tài khoản trên máy khác để tiếp tục với dữ liệu đã lưu.</p>
     <button onClick={login} disabled={busy} className={`${primary} w-full`}><LogIn size={18} />{busy ? 'Đang đăng nhập…' : 'Đăng nhập bằng Google'}</button>
-    {legacy && <p className="mt-5 text-sm text-slate-600">Đã tìm thấy dữ liệu cũ trên trình duyệt này. Sau khi đăng nhập, bạn có thể chuyển dữ liệu đó lên tài khoản.</p>}
-    {legacy && <button className={`${button} mt-3`} onClick={() => downloadBackup(legacy)}><Download size={16} />Sao lưu dữ liệu cũ</button>}
+    {legacySource && <p className="mt-5 text-sm text-slate-600">Trình duyệt này có dữ liệu phiên bản cũ. Hãy đăng nhập tài khoản đã dùng để tiếp tục.</p>}
     {message && <p role="alert" className="mt-4 text-sm text-rose-700">{message}</p>}
   </Screen>;
 

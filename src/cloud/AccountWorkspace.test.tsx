@@ -117,6 +117,25 @@ describe('đăng nhập và dữ liệu theo tài khoản', () => {
     expect(screen.queryByTestId('school')).toBeNull();
     expect(mocks.save).not.toHaveBeenCalled();
   });
+
+  it('không cho tài khoản khác chuyển hoặc xuất dữ liệu cũ đã thuộc chủ cũ', async () => {
+    localStorage.setItem(LEGACY_KEY, JSON.stringify(getEmptyDatabase()));
+    localStorage.setItem('STUDENT_LEGACY_OWNER_V1', 'different-owner');
+    mocks.load.mockResolvedValue(null);
+    mount();
+    await screen.findByRole('button', { name: 'Tạo dữ liệu học sinh mới' });
+    expect(screen.queryByRole('button', {name: /Chuyển dữ liệu trên máy/})).toBeNull();
+    expect(screen.queryByRole('button', {name: /Sao lưu dữ liệu cũ/})).toBeNull();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it('khách chưa đăng nhập không có nút tải dữ liệu học sinh cũ', async () => {
+    mocks.user = null;
+    localStorage.setItem(LEGACY_KEY, JSON.stringify(getEmptyDatabase()));
+    mount();
+    await screen.findByRole('button', { name: 'Đăng nhập bằng Google' });
+    expect(screen.queryByRole('button', {name: /Sao lưu dữ liệu cũ/})).toBeNull();
+  });
 });
 
 describe('dữ liệu lớn và Unicode', () => {
