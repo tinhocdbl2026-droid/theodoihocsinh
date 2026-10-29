@@ -147,10 +147,15 @@ export function AccountWorkspace({ children }: Props) {
   useEffect(() => onAuthStateChanged(auth, owner => {
     clearTimeout(timer.current);
     currentUser.current = owner;
+    // Attribute the pre-account local database to the first signed-in owner on
+    // this browser, even when their server copy is newer than the legacy copy.
+    if (owner && legacyRef.current && !localStorage.getItem(LEGACY_OWNER_KEY)) {
+      try { claimLegacy(); } catch { /* keep the legacy copy untouched */ }
+    }
     latest.current = null;
     setUser(owner); setSeed(null); setRecovery(null); setChooseInitial(false); setChecking(false);
     if (owner) void load(owner);
-  }, error => { setChecking(false); setHasError(true); setMessage(errorMessage(error)); }), [load]);
+  }, error => { setChecking(false); setHasError(true); setMessage(errorMessage(error)); }), [load, claimLegacy]);
 
   useEffect(() => {
     const online = () => { if (latest.current) void flush(); };

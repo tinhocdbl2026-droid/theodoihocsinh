@@ -136,6 +136,18 @@ describe('đăng nhập và dữ liệu theo tài khoản', () => {
     await screen.findByRole('button', { name: 'Đăng nhập bằng Google' });
     expect(screen.queryByRole('button', {name: /Sao lưu dữ liệu cũ/})).toBeNull();
   });
+
+  it('bản cũ khác cloud vẫn được giữ cho chủ đầu tiên, không đưa sang tài khoản sau', async () => {
+    const legacy = getEmptyDatabase(); legacy.settings.schoolName = 'Bản cũ trên máy';
+    localStorage.setItem(LEGACY_KEY, JSON.stringify(legacy));
+    mount(); await screen.findByTestId('school');
+    expect(localStorage.getItem('STUDENT_LEGACY_OWNER_V1')).toBe(owner.uid);
+    mocks.load.mockResolvedValue(null);
+    await act(async () => mocks.listener({uid:'another-account',email:'another@example.test'}));
+    await screen.findByRole('button', {name:'Tạo dữ liệu học sinh mới'});
+    expect(screen.queryByRole('button', {name:/Chuyển dữ liệu trên máy/})).toBeNull();
+    expect(localStorage.getItem(LEGACY_KEY)).toBe(JSON.stringify(legacy));
+  });
 });
 
 describe('dữ liệu lớn và Unicode', () => {
