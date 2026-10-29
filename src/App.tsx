@@ -1,3 +1,4 @@
+import { AccountWorkspace } from './cloud/AccountWorkspace';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -11,7 +12,7 @@ import {
   ViewMode, 
   ScoreHistoryLog 
 } from './types';
-import { dbService, generateInitialStudents, INITIAL_23_CLASSES } from './services/db';
+import { getAccountDatabase, type DatabaseService, type AppDatabaseState, generateInitialStudents, INITIAL_23_CLASSES } from './services/db';
 import { soundService } from './services/sound';
 import { exportAll23ClassesToExcel } from './services/excel';
 import { Navbar } from './components/Navbar';
@@ -27,20 +28,20 @@ import { ReportExportModal } from './components/ReportExportModal';
 import { Loader2, X } from 'lucide-react';
 
 export default function App() {
-  const [loading, setLoading] = useState(true);
-  const [classes, setClasses] = useState<ClassRoom[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [settings, setSettings] = useState<AppSettings>({
-    schoolName: 'Trường Tiểu Học Chu Văn An',
-    schoolYear: '2025 - 2026',
-    teacherName: 'Giáo Viên Tin Học',
-    subjectName: 'Môn Tin Học',
-    soundEnabled: true,
-    currentWeek: 6,
-    selectedClassId: 'c-1-1',
-  });
+  return <AccountWorkspace>{(database, changed, uid) => <StudentApp initialDatabase={database} onDatabaseChange={changed} dbService={getAccountDatabase(uid)} />}</AccountWorkspace>;
+}
+
+export function StudentApp({ initialDatabase, onDatabaseChange, dbService }: {
+  initialDatabase: AppDatabaseState;
+  onDatabaseChange: (state: AppDatabaseState) => void;
+  dbService: DatabaseService;
+}) {
+  const loading = false;
+  const [classes, setClasses] = useState<ClassRoom[]>(initialDatabase.classes);
+  const [students, setStudents] = useState<Student[]>(initialDatabase.students);
+  const [settings, setSettings] = useState<AppSettings>(initialDatabase.settings);
   const [currentMode, setCurrentMode] = useState<ViewMode>('quick-score');
-  const [history, setHistory] = useState<ScoreHistoryLog[]>([]);
+  const [history, setHistory] = useState<ScoreHistoryLog[]>(initialDatabase.history);
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
 
   // Modals
@@ -55,24 +56,12 @@ export default function App() {
   const [newClassGradeInput, setNewClassGradeInput] = useState<number>(1);
   const [newClassRoomInput, setNewClassRoomInput] = useState('Phòng Tin Học 1');
 
-  // Load initial state from IndexedDB
+  // Persist only to this signed-in account's local database and cloud queue.
   useEffect(() => {
-    async function loadData() {
-      try {
-        const state = await dbService.loadState();
-        setClasses(state.classes);
-        setStudents(state.students);
-        setSettings(state.settings);
-        setHistory(state.history || []);
-        setLastSavedTime(new Date());
-      } catch (err) {
-        console.error('Failed to load database state:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
-  }, []);
+    const state = { classes, students, settings, history };
+    onDatabaseChange(state);
+    void dbService.saveAll(state);
+  }, [classes, students, settings, history, onDatabaseChange, dbService]);
 
   // Current active class
   const currentClass = useMemo(() => {
@@ -298,7 +287,7 @@ export default function App() {
           classId,
           scores,
           totalScore: 0,
-          gender: 'nam',
+          gender: '',
         };
       });
 
@@ -498,7 +487,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100/90 text-slate-800 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-full bg-slate-100/90 text-slate-800 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
       {/* Top Main Navigation */}
       <Navbar
         settings={settings}

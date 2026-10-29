@@ -77,7 +77,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentNameInput, setStudentNameInput] = useState('');
   const [studentSttInput, setStudentSttInput] = useState<number>(1);
-  const [studentGenderInput, setStudentGenderInput] = useState<'nam' | 'nu'>('nam');
+  const [studentGenderInput, setStudentGenderInput] = useState<'nam' | 'nu' | ''>('');
   const [studentNotesInput, setStudentNotesInput] = useState('');
 
   // Batch paste modal
@@ -152,7 +152,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({
     setEditingStudent(null);
     setStudentNameInput('');
     setStudentSttInput(classStudents.length + 1);
-    setStudentGenderInput('nam');
+    setStudentGenderInput('');
     setStudentNotesInput('');
     setIsStudentModalOpen(true);
   };
@@ -162,7 +162,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({
     setEditingStudent(stu);
     setStudentNameInput(stu.fullName);
     setStudentSttInput(stu.stt);
-    setStudentGenderInput(stu.gender || 'nam');
+    setStudentGenderInput(stu.gender || '');
     setStudentNotesInput(stu.notes || '');
     setIsStudentModalOpen(true);
   };
@@ -466,7 +466,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({
                                 : 'bg-blue-100 text-blue-700'
                             }`}
                           >
-                            {stu.gender === 'nu' ? 'Nữ' : 'Nam'}
+                            {stu.gender === 'nu' ? 'Nữ' : stu.gender === 'nam' ? 'Nam' : 'Chưa xác định'}
                           </span>
                         </td>
                         <td className="p-3 text-center font-black text-amber-600 text-sm">
@@ -666,6 +666,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({
                     onChange={(e) => setStudentGenderInput(e.target.value as any)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
                   >
+                    <option value="">Chưa xác định</option>
                     <option value="nam">Nam</option>
                     <option value="nu">Nữ</option>
                   </select>

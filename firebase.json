@@ -1,0 +1,34 @@
+{
+  "hosting": {
+    "site": "theodoihocsinh-ced29",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ]
+  },
+  "firestore": [
+    {
+      "database": "ai-studio-ngnhngkimtraai-08038e21-4822-46d4-92ef-26e72b0351e7",
+      "rules": "firestore.rules"
+    }
+  ]
+}

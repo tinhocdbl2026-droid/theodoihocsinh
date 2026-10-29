@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Private student tracker; existing teaching applications keep their rules.
+    match /studentTracker/{ownerId} {
+      allow read: if request.auth != null && request.auth.uid == ownerId
+        && request.auth.token.email == 'tinhocdbl2026@gmail.com' && request.auth.token.email_verified == true;
+      allow create, update: if request.auth != null && request.auth.uid == ownerId
+        && request.auth.token.email == 'tinhocdbl2026@gmail.com' && request.auth.token.email_verified == true
+        && request.resource.data.keys().hasOnly(['payload','revision','updatedAt'])
+        && request.resource.data.payload is string && request.resource.data.payload.size() < 900000
+        && request.resource.data.revision is int && request.resource.data.revision > 0;
+    }
+
+    // Default-deny all by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'tinhocdbl2026@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      
+      // User can create their initial profile (must be non-admin unless bootstrapped)
+      allow create: if isVerified() && isValidId(userId) && request.auth.uid == userId
+        && incoming().userId == userId
+        && incoming().email == request.auth.token.email
+        && (incoming().role == 'teacher' || (incoming().role == 'admin' && isBootstrappedAdmin()))
+        && incoming().status in ['active', 'pending'];
+        
+      // User can update basic profile info, cannot elevate role or change status unless admin
+      allow update: if isVerified() && isValidId(userId) && (
+        isAdmin() ||
+        (request.auth.uid == userId 
+          && incoming().role == existing().role
+          && incoming().status == existing().status
+          && incoming().userId == existing().userId
+          && incoming().email == existing().email)
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // --- Admins collection ---
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isBootstrappedAdmin();
+    }
+
+    // --- Exams Collection ---
+    match /exams/{examId} {
+      allow get: if isVerified() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow list: if isVerified();
+      
+      allow create: if isVerified() && isValidId(examId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().id == examId
+        && incoming().title is string && incoming().title.size() <= 256
+        && incoming().grade is number && incoming().grade >= 1 && incoming().grade <= 5;
+
+      allow update: if isVerified() && isValidId(examId)
+        && (isAdmin() || (existing().createdBy == request.auth.uid && incoming().createdBy == existing().createdBy));
+
+      allow delete: if isVerified() && isValidId(examId)
+        && (isAdmin() || existing().createdBy == request.auth.uid);
+    }
+
+    // --- Questions Bank Collection ---
+    match /questions/{questionId} {
+      allow get: if isVerified() && (resource.data.isPublic == true || resource.data.createdBy == request.auth.uid || isAdmin());
+      allow list: if isVerified();
+
+      allow create: if isVerified() && isValidId(questionId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().id == questionId
+        && incoming().subject is string && incoming().subject.size() <= 64
+        && incoming().grade is number && incoming().grade >= 1 && incoming().grade <= 5;
+
+      allow update: if isVerified() && isValidId(questionId)
+        && (isAdmin() || (existing().createdBy == request.auth.uid && incoming().createdBy == existing().createdBy));
+
+      allow delete: if isVerified() && isValidId(questionId)
+        && (isAdmin() || existing().createdBy == request.auth.uid);
+    }
+
+    // --- Documents Collection ---
+    match /documents/{docId} {
+      allow get: if isVerified() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow list: if isVerified();
+
+      allow create: if isVerified() && isValidId(docId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().id == docId
+        && incoming().title is string && incoming().title.size() <= 256;
+
+      allow update: if isVerified() && isValidId(docId)
+        && (isAdmin() || (existing().createdBy == request.auth.uid && incoming().createdBy == existing().createdBy));
+
+      allow delete: if isVerified() && isValidId(docId)
+        && (isAdmin() || existing().createdBy == request.auth.uid);
+    }
+    function studentAccountOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    match /studentAccounts/{uid}/state/main {
+      allow read: if studentAccountOwner(uid);
+      allow create, update: if studentAccountOwner(uid)
+        && request.resource.data.keys().hasOnly(['revision', 'count', 'updatedAt'])
+        && request.resource.data.revision is int
+        && request.resource.data.revision > 0
+        && request.resource.data.count is int
+        && request.resource.data.count > 0 && request.resource.data.count <= 250
+        && request.resource.data.updatedAt == request.time;
+    }
+    match /studentAccounts/{uid}/chunks/{chunk} {
+      allow read: if studentAccountOwner(uid);
+      allow create, update: if studentAccountOwner(uid)
+        && request.resource.data.keys().hasOnly(['revision', 'text'])
+        && request.resource.data.revision is int
+        && request.resource.data.revision > 0
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 96000;
+    }
+    // Preserve read access to snapshots written by the previous tracker release.
+    match /studentTracker/{uid} {
+      allow get: if studentAccountOwner(uid);
+    }
+
+  }
+}

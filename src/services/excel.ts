@@ -58,7 +58,7 @@ export function exportSingleClassToExcel(
       idx + 1,
       stu.id,
       stu.fullName,
-      stu.gender === 'nu' ? 'Nữ' : 'Nam',
+      stu.gender === 'nu' ? 'Nữ' : stu.gender === 'nam' ? 'Nam' : 'Chưa xác định',
     ];
 
     let rowSum = 0;
@@ -407,7 +407,8 @@ export async function parseExcelOrCsvFile(
 
           const notes = notesColIndex !== -1 ? String(row[notesColIndex] || '').trim() : '';
           const genderRaw = genderColIndex !== -1 ? String(row[genderColIndex] || '').trim().toLowerCase() : '';
-          const gender: 'nam' | 'nu' = genderRaw.includes('nữ') || genderRaw === 'f' || genderRaw === 'female' ? 'nu' : 'nam';
+          const normalizedGender = genderRaw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const gender: Student['gender'] = ['nu','f','female'].includes(normalizedGender) ? 'nu' : ['nam','m','male'].includes(normalizedGender) ? 'nam' : '';
 
           const scores: Record<number, number> = {};
           let totalScore = 0;
@@ -485,7 +486,7 @@ export function exportWeeklyClassReport(
       idx + 1,
       stu.id,
       stu.fullName,
-      stu.gender === 'nu' ? 'Nữ' : 'Nam',
+      stu.gender === 'nu' ? 'Nữ' : stu.gender === 'nam' ? 'Nam' : 'Chưa xác định',
       wScore,
       evalText,
       stu.totalScore,

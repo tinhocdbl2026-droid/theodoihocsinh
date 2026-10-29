@@ -6,7 +6,7 @@ export interface Student {
   scores: Record<number, number>; // week 1..35 -> points
   totalScore: number;
   notes?: string;
-  gender?: 'nam' | 'nu';
+  gender?: 'nam' | 'nu' | '';
 }
 
 export interface ClassRoom {

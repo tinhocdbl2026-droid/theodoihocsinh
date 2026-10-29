@@ -53,6 +53,8 @@ export const INITIAL_23_CLASSES: ClassRoom[] = [
   { id: 'c-5-5', name: '5/5', grade: 5, order: 23, room: 'Phòng Tin Học 2' },
 ];
 
+const SAMPLE_GENDERS: Student['gender'][] = ['nam','nu','nam','nu','nam','nu','nu','nam','nam','nu','nam','nu','nam','nam','nu','nam','nu','nam','nu','nam','nam','nu','nam','nu','nam','nu','nam','nu','nam','nu','nam','nu','nam','nam','nu'];
+
 const VIETNAMESE_NAMES_SEED = [
   'Nguyễn Văn An', 'Trần Thị Bảo An', 'Lê Hoàng Anh', 'Phạm Minh Châu', 'Hoàng Tuấn Dũng',
   'Đỗ Thùy Dung', 'Bùi Gia Hân', 'Vũ Quốc Huy', 'Đặng Nhật Khang', 'Ngô Khánh Linh',
@@ -102,7 +104,7 @@ export function generateInitialStudents(): Student[] {
         scores,
         totalScore,
         notes: i === 1 ? 'Lớp trưởng' : i === 2 ? 'Lớp phó học tập' : '',
-        gender: i % 2 === 0 ? 'nu' : 'nam',
+        gender: SAMPLE_GENDERS[nameIndex],
       });
     }
   });
@@ -110,7 +112,24 @@ export function generateInitialStudents(): Student[] {
   return students;
 }
 
-class DatabaseService {
+export class DatabaseService {
+  constructor(private databaseName = DB_NAME, private backupKey = LOCALSTORAGE_BACKUP_KEY) {}
+
+  async readExistingState(): Promise<AppDatabaseState | null> {
+    try {
+      const databases = await indexedDB.databases();
+      if (!databases.some(database => database.name === this.databaseName)) return null;
+      const db = await this.openDB();
+      const classes = await this.getAllFromStore<ClassRoom>(db, 'classes');
+      const students = await this.getAllFromStore<Student>(db, 'students');
+      const settingsRecords = await this.getAllFromStore<{key: string; value: AppSettings}>(db, 'settings');
+      const history = await this.getAllFromStore<ScoreHistoryLog>(db, 'history');
+      const saved = settingsRecords.find(record => record.key === 'app_settings');
+      if (!saved || !classes.length) return null;
+      return { classes: classes.sort((a,b) => a.order-b.order), students: students.sort((a,b) => a.stt-b.stt), settings: saved.value, history };
+    } catch { return null; }
+  }
+
   private dbPromise: Promise<IDBDatabase> | null = null;
 
   private openDB(): Promise<IDBDatabase> {
@@ -122,7 +141,7 @@ class DatabaseService {
         return;
       }
 
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const request = indexedDB.open(this.databaseName, DB_VERSION);
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
@@ -175,7 +194,13 @@ class DatabaseService {
         // Sort classes by order
         classes.sort((a, b) => a.order - b.order);
         students.sort((a, b) => a.stt - b.stt);
-        const state: AppDatabaseState = { classes, students, settings, history };
+        const fixedStudents = students.map(s => {
+          const match = /^stu-c-[1-5]-[1-5]-(\d+)$/.exec(s.id);
+          const index = match ? Number(match[1]) - 1 : -1;
+          return index >= 0 && s.fullName === VIETNAMESE_NAMES_SEED[index] && s.gender === (index % 2 === 1 ? 'nu' : 'nam') && !localStorage.getItem(this.backupKey + '_sample_gender_v2') ? {...s, gender:SAMPLE_GENDERS[index]} : s;
+        });
+        const state: AppDatabaseState = { classes, students: fixedStudents, settings, history };
+        if (!localStorage.getItem(this.backupKey + '_sample_gender_v2')) { await this.saveAll(state); localStorage.setItem(this.backupKey + '_sample_gender_v2','1'); }
         this.backupToLocalStorage(state);
         return state;
       }
@@ -185,7 +210,7 @@ class DatabaseService {
 
     // Try localStorage backup
     try {
-      const backupJson = localStorage.getItem(LOCALSTORAGE_BACKUP_KEY);
+      const backupJson = localStorage.getItem(this.backupKey);
       if (backupJson) {
         const parsed = JSON.parse(backupJson) as AppDatabaseState;
         if (parsed.classes && parsed.classes.length > 0 && parsed.students && parsed.students.length > 0) {
@@ -352,7 +377,7 @@ class DatabaseService {
 
   private backupToLocalStorage(state: AppDatabaseState) {
     try {
-      localStorage.setItem(LOCALSTORAGE_BACKUP_KEY, JSON.stringify(state));
+      localStorage.setItem(this.backupKey, JSON.stringify(state));
     } catch {
       // In case quota exceeded, keep working without crashing
     }
@@ -370,3 +395,15 @@ class DatabaseService {
 }
 
 export const dbService = new DatabaseService();
+
+const accountDatabases = new Map<string, DatabaseService>();
+export function getAccountDatabase(uid: string): DatabaseService {
+  if (!uid) throw new Error('Cần đăng nhập trước khi truy cập dữ liệu.');
+  const key = encodeURIComponent(uid);
+  if (!accountDatabases.has(key)) accountDatabases.set(key, new DatabaseService(`${DB_NAME}_account_${key}`, `student_account_backup_${key}`));
+  return accountDatabases.get(key)!;
+}
+
+export function getEmptyDatabase(): AppDatabaseState {
+  return { classes: INITIAL_23_CLASSES.map(cls => ({...cls})), students: [], settings: {...DEFAULT_SETTINGS}, history: [] };
+}

@@ -75,7 +75,7 @@ export const QuickScoreView: React.FC<QuickScoreViewProps> = ({
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentNameInput, setStudentNameInput] = useState('');
   const [studentSttInput, setStudentSttInput] = useState<number>(1);
-  const [studentGenderInput, setStudentGenderInput] = useState<'nam' | 'nu'>('nam');
+  const [studentGenderInput, setStudentGenderInput] = useState<'nam' | 'nu' | ''>('');
   const [studentNotesInput, setStudentNotesInput] = useState('');
 
   // Batch paste modal
@@ -199,7 +199,7 @@ export const QuickScoreView: React.FC<QuickScoreViewProps> = ({
     setEditingStudent(null);
     setStudentNameInput('');
     setStudentSttInput(classStudents.length + 1);
-    setStudentGenderInput('nam');
+    setStudentGenderInput('');
     setStudentNotesInput('');
     setIsAddModalOpen(true);
   };
@@ -208,7 +208,7 @@ export const QuickScoreView: React.FC<QuickScoreViewProps> = ({
     setEditingStudent(stu);
     setStudentNameInput(stu.fullName);
     setStudentSttInput(stu.stt);
-    setStudentGenderInput(stu.gender || 'nam');
+    setStudentGenderInput(stu.gender || '');
     setStudentNotesInput(stu.notes || '');
     setIsAddModalOpen(true);
   };
@@ -531,9 +531,9 @@ export const QuickScoreView: React.FC<QuickScoreViewProps> = ({
                         <span className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
                           {student.fullName}
                         </span>
-                        {student.gender === 'nu' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-pink-100 text-pink-700 font-medium">
-                            Nữ
+                        {(
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${student.gender === 'nu' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {student.gender === 'nu' ? 'Nữ' : student.gender === 'nam' ? 'Nam' : 'Chưa xác định'}
                           </span>
                         )}
                         {student.notes && (
@@ -701,6 +701,7 @@ export const QuickScoreView: React.FC<QuickScoreViewProps> = ({
                     onChange={(e) => setStudentGenderInput(e.target.value as any)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white"
                   >
+                    <option value="">Chưa xác định</option>
                     <option value="nam">Nam</option>
                     <option value="nu">Nữ</option>
                   </select>
